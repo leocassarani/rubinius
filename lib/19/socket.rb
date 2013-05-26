@@ -307,6 +307,11 @@ class Socket < BasicSocket
       config("rbx.platform.linger", :l_onoff, :l_linger)
     end
 
+    class Ifaddrs < FFI::Struct
+      config("rbx.platform.ifaddrs", :ifa_next, :ifa_name, :ifa_flags,
+             :ifa_addr, :ifa_netmask, :ifa_dstaddr, :ifa_data)
+    end
+
     attach_function :_bind,    "bind", [:int, :pointer, :socklen_t], :int
     attach_function :_connect, "connect", [:int, :pointer, :socklen_t], :int
 
@@ -342,6 +347,9 @@ class Socket < BasicSocket
     attach_function :_getnameinfo,
                     "getnameinfo", [:pointer, :socklen_t, :pointer, :socklen_t,
                                     :pointer, :socklen_t, :int], :int
+
+    attach_function :_getifaddrs,  "getifaddrs", [:pointer], :int
+    attach_function :freeifaddrs,  [:pointer], :void
 
     def self.bind(descriptor, sockaddr)
       FFI::MemoryPointer.new :char, sockaddr.length do |sockaddr_p|
@@ -503,6 +511,46 @@ class Socket < BasicSocket
 
           sockaddr_storage_p.read_string len_p.read_int
         end
+      end
+    end
+
+    def self.ip_address_list
+      res_p = FFI::MemoryPointer.new :pointer
+
+      err = _getifaddrs(res_p)
+
+      raise SocketError, gai_strerror(err) unless err == 0
+
+      ptr = res_p.read_pointer
+
+      res = Ifaddrs.new ptr
+
+      addrinfos = []
+
+      while true
+        addrinfo = Addrinfo.new
+
+        addrinfo[:ai_family] = 0
+        addrinfo[:ai_socktype] = 0
+        addrinfo[:ai_protocol] = 0
+
+        addrinfos << addrinfo
+
+        break unless res[:ifa_next]
+
+        res = Ifaddrs.new res[:ifa_next]
+      end
+
+      return addrinfos
+    ensure
+      if res_p
+        ptr = res_p.read_pointer
+
+        if ptr and !ptr.null?
+          freeifaddrs ptr
+        end
+
+        res_p.free
       end
     end
 
@@ -949,6 +997,10 @@ class Socket < BasicSocket
         return Socket::Foreign.ntohs(s[:s_port])
       end
     end
+  end
+
+  def self.ip_address_list
+    Socket::Foreign.ip_address_list
   end
 
   def self.pack_sockaddr_in(port, host, type = Socket::SOCK_DGRAM, flags = 0)

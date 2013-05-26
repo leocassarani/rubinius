@@ -26,6 +26,18 @@ file 'runtime/platform.conf' => deps do |task|
       s.field :ai_next, :pointer
     end.write_config(f)
 
+    Rubinius::FFI::Generators::Structures.new 'ifaddrs' do |s|
+      s.name 'struct ifaddrs'
+      s.include 'ifaddrs.h'
+      s.field :ifa_next, :pointer
+      s.field :ifa_name, :string
+      s.field :ifa_flags, :uint
+      s.field :ifa_addr, :pointer
+      s.field :ifa_netmask, :pointer
+      s.field :ifa_dstaddr, :pointer
+      s.field :ifa_data, :pointer
+    end.write_config(f)
+
     Rubinius::FFI::Generators::Structures.new 'dirent' do |s|
       s.include "sys/types.h"
       s.include "dirent.h"
